@@ -14,7 +14,7 @@ from typing import List, Dict
 # Import custom modules
 from config import Config
 from logger import setup_logger
-from nitter_client import NitterClient
+from bird_makeup_client import BirdMakeupClient
 from sentiment_analyzer import SentimentAnalyzer
 from influxdb_client import InfluxDBManager
 from correlation_analyzer import CorrelationAnalyzer
@@ -33,10 +33,10 @@ class SentimentAnalysisSystem:
             Config.validate_config()
             
             # Initialize components
-            self.nitter_client = NitterClient(
-                Config.NITTER_BASE_URL,
-                Config.NITTER_USERNAME,
-                Config.NITTER_PASSWORD
+            self.bird_makeup_client = BirdMakeupClient(
+                Config.get_base_url(),
+                Config.get_username(),
+                Config.get_password()
             )
             
             self.sentiment_analyzer = SentimentAnalyzer()
@@ -56,6 +56,10 @@ class SentimentAnalysisSystem:
                 Config.EMAIL_USERNAME,
                 Config.EMAIL_PASSWORD
             )
+            
+            # Test connection
+            if not self.bird_makeup_client.test_connection():
+                logger.warning("Could not verify connection to Bird.makeup instance")
             
             logger.info("Sentiment analysis system initialized successfully")
             
@@ -86,7 +90,7 @@ class SentimentAnalysisSystem:
             logger.info(f"Analyzing sentiment for @{username}")
             
             # Fetch tweets from the last day
-            tweets = self.nitter_client.get_user_tweets(username, days_back=1)
+            tweets = self.bird_makeup_client.get_user_tweets(username, days_back=1)
             
             if len(tweets) < Config.MIN_TWEETS_FOR_ANALYSIS:
                 logger.warning(f"Insufficient tweets for @{username}: {len(tweets)} (minimum: {Config.MIN_TWEETS_FOR_ANALYSIS})")
@@ -292,7 +296,7 @@ def main():
     """Main entry point."""
     system = None
     try:
-        logger.info("Starting Twitter Sentiment Analysis System")
+        logger.info("Starting Twitter Sentiment Analysis System with Bird.makeup")
         
         # Initialize system
         system = SentimentAnalysisSystem()

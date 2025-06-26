@@ -7,8 +7,13 @@ load_dotenv()
 class Config:
     """Configuration management for the sentiment analysis system."""
     
-    # Nitter Configuration
-    NITTER_BASE_URL = os.getenv('NITTER_BASE_URL', 'https://nitter.net')
+    # Bird.makeup Configuration (formerly Nitter)
+    BIRD_MAKEUP_BASE_URL = os.getenv('BIRD_MAKEUP_BASE_URL', 'https://bird.makeup')
+    BIRD_MAKEUP_USERNAME = os.getenv('BIRD_MAKEUP_USERNAME')  # Optional for authentication
+    BIRD_MAKEUP_PASSWORD = os.getenv('BIRD_MAKEUP_PASSWORD')  # Optional for authentication
+    
+    # Legacy support for existing .env files
+    NITTER_BASE_URL = os.getenv('NITTER_BASE_URL', 'https://bird.makeup')
     NITTER_USERNAME = os.getenv('NITTER_USERNAME')
     NITTER_PASSWORD = os.getenv('NITTER_PASSWORD')
     
@@ -38,6 +43,21 @@ class Config:
     # Keywords for price correlation
     OIL_KEYWORDS = ['WTI', 'Brent', 'crude oil', 'OPEC', 'oil price', 'petroleum', 'barrel']
     ELECTRICITY_KEYWORDS = ['Strompreis', 'Energiekosten', 'kWh', 'electricity price', 'power price', 'energy cost']
+    
+    @classmethod
+    def get_base_url(cls) -> str:
+        """Get the base URL, preferring Bird.makeup over legacy Nitter config."""
+        return cls.BIRD_MAKEUP_BASE_URL or cls.NITTER_BASE_URL
+    
+    @classmethod
+    def get_username(cls) -> str:
+        """Get the username, preferring Bird.makeup over legacy Nitter config."""
+        return cls.BIRD_MAKEUP_USERNAME or cls.NITTER_USERNAME
+    
+    @classmethod
+    def get_password(cls) -> str:
+        """Get the password, preferring Bird.makeup over legacy Nitter config."""
+        return cls.BIRD_MAKEUP_PASSWORD or cls.NITTER_PASSWORD
     
     @classmethod
     def validate_config(cls) -> bool:
