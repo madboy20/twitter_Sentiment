@@ -33,5 +33,31 @@
 @EnergyAspects
 @WoodMackenzie
 @RystadEnergy
+@AndurandPierre
 
 # Add your specific accounts here
+# Newsticker
+@financialjuice
+@zerohedge
+@visegrad24
+@DeItaone
+
+#Randomaccounts
+@BFMuenchen
+@PolizeiMuenchen
+@boeckler_de
+@Joerg_Meuthen
+@Martin_Sellner
+@IBDeutschland
+@Alice_Weidel
+@elonmusk
+@realDonaldTrump
+@_FriedrichMerz
+@IBOesterreich
+@RadioGenoa
+@blyskavka_ua
+@NATO
+@GermanyNATO
+@dpa
+@tassagency_en
+@XHNews
