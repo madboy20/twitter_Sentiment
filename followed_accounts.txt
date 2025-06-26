@@ -1,0 +1,37 @@
+# Twitter accounts to analyze for sentiment
+# One account per line, @ symbol is optional
+# Lines starting with # are comments
+
+# Energy sector accounts
+@EnergyIntel
+@OilPrice
+@PlattsOil
+@ArgusMedia
+
+# Financial news
+@BloombergEnergy
+@ReutersEnergy
+@WSJEnergy
+
+# German energy specific
+@BWEeV
+@VKU_eV
+@BDEW_Bundesverband
+
+# Oil & Gas companies
+@Shell
+@bp_plc
+@exxonmobil
+@Chevron
+
+# Renewable energy
+@IRENA
+@IEA
+@RenewableEnergyWorld
+
+# Market analysts
+@EnergyAspects
+@WoodMackenzie
+@RystadEnergy
+
+# Add your specific accounts here
