@@ -2,6 +2,7 @@
 """
 Twitter Sentiment Analysis with Price Correlation
 Main execution script for daily sentiment analysis and reporting.
+Enhanced with Selenium fallback capability.
 """
 
 import os
@@ -14,7 +15,7 @@ from typing import List, Dict
 # Import custom modules
 from config import Config
 from logger import setup_logger
-from bird_makeup_client import BirdMakeupClient
+from enhanced_bird_makeup_client import EnhancedBirdMakeupClient
 from sentiment_analyzer import SentimentAnalyzer
 from db_manager import InfluxDBManager
 from correlation_analyzer import CorrelationAnalyzer
@@ -32,11 +33,13 @@ class SentimentAnalysisSystem:
             # Validate configuration
             Config.validate_config()
             
-            # Initialize components
-            self.bird_makeup_client = BirdMakeupClient(
+            # Initialize enhanced client with Selenium fallback
+            self.bird_makeup_client = EnhancedBirdMakeupClient(
                 Config.get_base_url(),
                 Config.get_username(),
-                Config.get_password()
+                Config.get_password(),
+                Config.get_twitter_username(),
+                Config.get_twitter_password()
             )
             
             self.sentiment_analyzer = SentimentAnalyzer()
@@ -60,8 +63,12 @@ class SentimentAnalysisSystem:
             # Test connection
             if not self.bird_makeup_client.test_connection():
                 logger.warning("Could not verify connection to Bird.makeup instance")
+                if Config.get_twitter_username() and Config.get_twitter_password():
+                    logger.info("Selenium fallback available")
+                else:
+                    logger.warning("No Selenium fallback credentials configured")
             
-            logger.info("Sentiment analysis system initialized successfully")
+            logger.info("Enhanced sentiment analysis system initialized successfully")
             
         except Exception as e:
             logger.error(f"Failed to initialize system: {e}")
@@ -89,7 +96,7 @@ class SentimentAnalysisSystem:
         try:
             logger.info(f"Analyzing sentiment for @{username}")
             
-            # Fetch tweets from the last day
+            # Fetch tweets from the last day using enhanced client
             tweets = self.bird_makeup_client.get_user_tweets(username, days_back=1)
             
             if len(tweets) < Config.MIN_TWEETS_FOR_ANALYSIS:
@@ -170,7 +177,7 @@ class SentimentAnalysisSystem:
                 overall_sentiment, historical_sentiment
             )
             
-            # Extract trending topics (simplified implementation)
+            # Extract trending topics
             trending_topics = self._extract_trending_topics(account_analyses)
             
             # Compile results for reporting
@@ -195,24 +202,21 @@ class SentimentAnalysisSystem:
             self._send_error_notification(str(e))
     
     def _extract_trending_topics(self, account_analyses: List[Dict]) -> List[str]:
-        """Extract trending topics from tweets (simplified implementation)."""
+        """Extract trending topics from tweets."""
         try:
             import re
             from collections import Counter
             
-            # Extract hashtags and keywords
             all_text = []
             for analysis in account_analyses:
                 for sentiment in analysis.get('individual_sentiments', []):
                     tweet_text = sentiment.get('tweet_data', {}).get('text', '')
                     all_text.append(tweet_text)
             
-            # Find hashtags
             hashtags = []
             for text in all_text:
                 hashtags.extend(re.findall(r'#(\w+)', text.lower()))
             
-            # Get most common hashtags
             hashtag_counts = Counter(hashtags)
             trending = [tag for tag, count in hashtag_counts.most_common(20) if count > 1]
             
@@ -227,10 +231,8 @@ class SentimentAnalysisSystem:
         try:
             logger.info("Generating daily report")
             
-            # Generate report HTML
             report_html = self.report_generator.generate_daily_report(analysis_results)
             
-            # Send report
             subject = f"Daily Sentiment Analysis Report - {datetime.now().strftime('%Y-%m-%d')}"
             success = self.report_generator.send_report(
                 Config.RECIPIENT_EMAIL,
@@ -271,23 +273,21 @@ class SentimentAnalysisSystem:
         """Start the scheduled daily analysis."""
         logger.info(f"Starting scheduler - daily analysis at {Config.REPORT_TIME}")
         
-        # Schedule daily analysis
         schedule.every().day.at(Config.REPORT_TIME).do(self.run_daily_analysis)
         
-        # Run immediately if requested
         if len(sys.argv) > 1 and sys.argv[1] == '--run-now':
             logger.info("Running analysis immediately")
             self.run_daily_analysis()
         
-        # Keep the scheduler running
         while True:
             schedule.run_pending()
-            time.sleep(60)  # Check every minute
+            time.sleep(60)
     
     def cleanup(self):
         """Cleanup resources."""
         try:
             self.influx_manager.close()
+            self.bird_makeup_client.close()
             logger.info("System cleanup completed")
         except Exception as e:
             logger.error(f"Error during cleanup: {e}")
@@ -296,12 +296,9 @@ def main():
     """Main entry point."""
     system = None
     try:
-        logger.info("Starting Twitter Sentiment Analysis System with Bird.makeup")
+        logger.info("Starting Enhanced Twitter Sentiment Analysis System")
         
-        # Initialize system
         system = SentimentAnalysisSystem()
-        
-        # Start scheduler
         system.start_scheduler()
         
     except KeyboardInterrupt:

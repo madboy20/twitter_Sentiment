@@ -1,3 +1,8 @@
+"""
+Enhanced Bird.makeup client with Selenium fallback
+Combines ActivityPub scraping with Selenium-based Twitter scraping
+"""
+
 import requests
 import json
 from typing import List, Dict, Optional
@@ -5,14 +10,17 @@ from datetime import datetime, timedelta
 import time
 import re
 from urllib.parse import urljoin, quote
+
 from logger import setup_logger
+from twitter_scraper import TwitterScraper
 
 logger = setup_logger(__name__)
 
-class BirdMakeupClient:
-    """Client for fetching tweets from Bird.makeup using ActivityPub protocol."""
+class EnhancedBirdMakeupClient:
+    """Enhanced client with Bird.makeup primary and Selenium fallback."""
     
-    def __init__(self, base_url: str, username: Optional[str] = None, password: Optional[str] = None):
+    def __init__(self, base_url: str, username: Optional[str] = None, password: Optional[str] = None, 
+                 twitter_username: Optional[str] = None, twitter_password: Optional[str] = None):
         self.base_url = base_url.rstrip('/')
         self.session = requests.Session()
         self.session.headers.update({
@@ -21,30 +29,51 @@ class BirdMakeupClient:
             'Content-Type': 'application/activity+json'
         })
         
+        # Bird.makeup credentials
+        self.username = username
+        self.password = password
+        
+        # Twitter credentials for Selenium fallback
+        self.twitter_username = twitter_username
+        self.twitter_password = twitter_password
+        self.selenium_scraper = None
+        
         if username and password:
             self._authenticate(username, password)
         
-        logger.info(f"Bird.makeup client initialized for {self.base_url}")
+        logger.info(f"Enhanced Bird.makeup client initialized for {self.base_url}")
     
     def _authenticate(self, username: str, password: str) -> bool:
         """Authenticate with Bird.makeup instance if required."""
         try:
-            # Bird.makeup typically doesn't require authentication for public data
-            # This is a placeholder for potential future authentication needs
             logger.info("Authentication configured (Bird.makeup typically doesn't require auth for public data)")
             return True
-                
         except Exception as e:
             logger.error(f"Authentication failed: {e}")
             return False
     
     def get_user_tweets(self, username: str, days_back: int = 1) -> List[Dict]:
-        """Fetch tweets from a specific user for the last N days using ActivityPub."""
-        tweets = []
+        """Fetch tweets using Bird.makeup first, fallback to Selenium if needed."""
         username = username.lstrip('@')
         
+        # Try Bird.makeup first
+        tweets = self._get_tweets_bird_makeup(username, days_back)
+        
+        # If Bird.makeup fails or returns insufficient data, try Selenium
+        if len(tweets) < 5 and self.twitter_username and self.twitter_password:
+            logger.info(f"Bird.makeup returned {len(tweets)} tweets, trying Selenium fallback")
+            selenium_tweets = self._get_tweets_selenium(username, days_back)
+            if selenium_tweets:
+                tweets.extend(selenium_tweets)
+                logger.info(f"Selenium fallback added {len(selenium_tweets)} tweets")
+        
+        return tweets
+    
+    def _get_tweets_bird_makeup(self, username: str, days_back: int) -> List[Dict]:
+        """Get tweets using Bird.makeup ActivityPub."""
+        tweets = []
+        
         try:
-            # Try to get user's outbox (collection of posts)
             user_url = f"{self.base_url}/@{username}"
             outbox_url = f"{user_url}/outbox"
             
@@ -65,11 +94,9 @@ class BirdMakeupClient:
                 logger.error(f"Invalid JSON response for @{username}: {e}")
                 return tweets
             
-            # Parse ActivityPub collection
             tweets = self._parse_activitypub_collection(data, username, days_back)
-            
-            logger.info(f"Fetched {len(tweets)} tweets for @{username}")
-            time.sleep(2)  # Rate limiting - be respectful
+            logger.info(f"Bird.makeup fetched {len(tweets)} tweets for @{username}")
+            time.sleep(2)
             
         except requests.exceptions.RequestException as e:
             logger.error(f"Network error fetching tweets for @{username}: {e}")
@@ -78,13 +105,38 @@ class BirdMakeupClient:
         
         return tweets
     
+    def _get_tweets_selenium(self, username: str, days_back: int) -> List[Dict]:
+        """Get tweets using Selenium scraper."""
+        try:
+            if not self.selenium_scraper:
+                self.selenium_scraper = TwitterScraper(
+                    username=self.twitter_username,
+                    password=self.twitter_password,
+                    headless=True
+                )
+                
+                if not self.selenium_scraper.login():
+                    logger.error("Failed to login with Selenium scraper")
+                    return []
+            
+            tweets = self.selenium_scraper.scrape_user_tweets(
+                username=username,
+                max_tweets=50,
+                days_back=days_back
+            )
+            
+            return tweets
+            
+        except Exception as e:
+            logger.error(f"Error with Selenium scraper for @{username}: {e}")
+            return []
+    
     def _parse_activitypub_collection(self, data: Dict, username: str, days_back: int) -> List[Dict]:
         """Parse ActivityPub collection to extract tweets."""
         tweets = []
         cutoff_date = datetime.now() - timedelta(days=days_back)
         
         try:
-            # Handle different ActivityPub collection formats
             items = []
             
             if 'orderedItems' in data:
@@ -92,7 +144,6 @@ class BirdMakeupClient:
             elif 'items' in data:
                 items = data['items']
             elif 'first' in data:
-                # Collection might be paginated, get first page
                 first_page_url = data['first']
                 if isinstance(first_page_url, str):
                     first_page = self._fetch_collection_page(first_page_url)
@@ -101,7 +152,6 @@ class BirdMakeupClient:
                 elif isinstance(first_page_url, dict):
                     items = first_page_url.get('orderedItems', first_page_url.get('items', []))
             
-            # Process each item
             for item in items:
                 try:
                     tweet_data = self._parse_activitypub_note(item, username)
@@ -129,34 +179,25 @@ class BirdMakeupClient:
     def _parse_activitypub_note(self, item: Dict, username: str) -> Optional[Dict]:
         """Parse individual ActivityPub Note (tweet) object."""
         try:
-            # Handle different ActivityPub object structures
             note = item
             if item.get('type') == 'Create' and 'object' in item:
                 note = item['object']
             
-            # Skip if not a Note type
             if note.get('type') != 'Note':
                 return None
             
-            # Extract content
             content = note.get('content', '')
             if not content:
                 return None
             
-            # Clean HTML content
             text = self._clean_html_content(content)
-            
-            # Extract timestamp
             published = note.get('published')
             timestamp = self._parse_activitypub_timestamp(published) if published else datetime.now()
             
-            # Extract engagement metrics (if available)
-            # ActivityPub doesn't always include these, so we default to 0
             replies_count = 0
             reblogs_count = 0
             favourites_count = 0
             
-            # Some instances include these in replies/shares/likes collections
             if 'replies' in note:
                 replies_count = self._get_collection_count(note['replies'])
             if 'shares' in note:
@@ -164,7 +205,6 @@ class BirdMakeupClient:
             if 'likes' in note:
                 favourites_count = self._get_collection_count(note['likes'])
             
-            # Generate URL
             note_url = note.get('url', note.get('id', f"{self.base_url}/@{username}/status/{int(timestamp.timestamp())}"))
             
             return {
@@ -184,19 +224,12 @@ class BirdMakeupClient:
     def _clean_html_content(self, html_content: str) -> str:
         """Clean HTML content to extract plain text."""
         try:
-            # Remove HTML tags
             import re
             text = re.sub(r'<[^>]+>', '', html_content)
-            
-            # Decode HTML entities
             import html
             text = html.unescape(text)
-            
-            # Clean up whitespace
             text = ' '.join(text.split())
-            
             return text.strip()
-            
         except Exception as e:
             logger.warning(f"Error cleaning HTML content: {e}")
             return html_content
@@ -204,8 +237,6 @@ class BirdMakeupClient:
     def _parse_activitypub_timestamp(self, timestamp_str: str) -> datetime:
         """Parse ActivityPub timestamp string."""
         try:
-            # ActivityPub uses ISO 8601 format
-            # Handle different formats
             formats = [
                 '%Y-%m-%dT%H:%M:%SZ',
                 '%Y-%m-%dT%H:%M:%S.%fZ',
@@ -219,14 +250,12 @@ class BirdMakeupClient:
                 except ValueError:
                     continue
             
-            # If all formats fail, try parsing with dateutil if available
             try:
                 from dateutil import parser
                 return parser.parse(timestamp_str)
             except ImportError:
                 logger.warning("dateutil not available for timestamp parsing")
             
-            # Fallback to current time
             logger.warning(f"Could not parse timestamp: {timestamp_str}")
             return datetime.now()
             
@@ -240,7 +269,6 @@ class BirdMakeupClient:
             if isinstance(collection, dict):
                 return collection.get('totalItems', 0)
             elif isinstance(collection, str):
-                # Collection URL - we could fetch it, but for now return 0
                 return 0
             return 0
         except Exception:
@@ -259,6 +287,13 @@ class BirdMakeupClient:
         except Exception as e:
             logger.error(f"Failed to connect to Bird.makeup instance: {e}")
             return False
+    
+    def close(self):
+        """Close connections and cleanup."""
+        if self.selenium_scraper:
+            self.selenium_scraper.close()
+            self.selenium_scraper = None
+        logger.info("Enhanced Bird.makeup client closed")
 
-# Backward compatibility alias
-NitterClient = BirdMakeupClient
+# Backward compatibility
+BirdMakeupClient = EnhancedBirdMakeupClient

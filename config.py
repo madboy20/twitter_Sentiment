@@ -9,13 +9,17 @@ class Config:
     
     # Bird.makeup Configuration (formerly Nitter)
     BIRD_MAKEUP_BASE_URL = os.getenv('BIRD_MAKEUP_BASE_URL', 'https://bird.makeup')
-    BIRD_MAKEUP_USERNAME = os.getenv('BIRD_MAKEUP_USERNAME')  # Optional for authentication
-    BIRD_MAKEUP_PASSWORD = os.getenv('BIRD_MAKEUP_PASSWORD')  # Optional for authentication
+    BIRD_MAKEUP_USERNAME = os.getenv('BIRD_MAKEUP_USERNAME')
+    BIRD_MAKEUP_PASSWORD = os.getenv('BIRD_MAKEUP_PASSWORD')
     
     # Legacy support for existing .env files
     NITTER_BASE_URL = os.getenv('NITTER_BASE_URL', 'https://bird.makeup')
     NITTER_USERNAME = os.getenv('NITTER_USERNAME')
     NITTER_PASSWORD = os.getenv('NITTER_PASSWORD')
+    
+    # Twitter credentials for Selenium fallback
+    TWITTER_USERNAME = os.getenv('TWITTER_USERNAME')
+    TWITTER_PASSWORD = os.getenv('TWITTER_PASSWORD')
     
     # InfluxDB Configuration
     INFLUXDB_URL = os.getenv('INFLUXDB_URL', 'http://localhost:8086')
@@ -40,6 +44,10 @@ class Config:
     DAYS_HISTORY = int(os.getenv('DAYS_HISTORY', '30'))
     MIN_TWEETS_FOR_ANALYSIS = int(os.getenv('MIN_TWEETS_FOR_ANALYSIS', '5'))
     
+    # Scraper Configuration
+    SCRAPER_HEADLESS = os.getenv('SCRAPER_HEADLESS', 'true').lower() == 'true'
+    SCRAPER_BROWSER = os.getenv('SCRAPER_BROWSER', 'firefox').lower()
+    
     # Keywords for price correlation
     OIL_KEYWORDS = ['WTI', 'Brent', 'crude oil', 'OPEC', 'oil price', 'petroleum', 'barrel']
     ELECTRICITY_KEYWORDS = ['Strompreis', 'Energiekosten', 'kWh', 'electricity price', 'power price', 'energy cost']
@@ -58,6 +66,16 @@ class Config:
     def get_password(cls) -> str:
         """Get the password, preferring Bird.makeup over legacy Nitter config."""
         return cls.BIRD_MAKEUP_PASSWORD or cls.NITTER_PASSWORD
+    
+    @classmethod
+    def get_twitter_username(cls) -> str:
+        """Get Twitter username for Selenium fallback."""
+        return cls.TWITTER_USERNAME
+    
+    @classmethod
+    def get_twitter_password(cls) -> str:
+        """Get Twitter password for Selenium fallback."""
+        return cls.TWITTER_PASSWORD
     
     @classmethod
     def validate_config(cls) -> bool:
