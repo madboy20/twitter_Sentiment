@@ -60,14 +60,15 @@ class InfluxDBManager:
             logger.error(f"Error writing price correlation data: {e}")
     
     def get_oil_prices(self, days_back: int = 30) -> pd.DataFrame:
-        """Query oil price data from InfluxDB."""
+        """Query oil price data from InfluxDB using new schema."""
         try:
             query = f'''
             from(bucket: "{self.bucket}")
                 |> range(start: -{days_back}d)
-                |> filter(fn: (r) => r["_measurement"] == "oil_prices")
-                |> filter(fn: (r) => r["_field"] == "wti_price" or r["_field"] == "brent_price")
-                |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
+                |> filter(fn: (r) => r["_measurement"] == "crude_oil_prices")
+                |> filter(fn: (r) => r["_field"] == "price_usd")
+                |> filter(fn: (r) => r["type"] == "wti_price" or r["type"] == "brent_price")
+                |> pivot(rowKey:["_time"], columnKey: ["type"], valueColumn: "_value")
             '''
             
             result = self.query_api.query_data_frame(query, org=self.org)
@@ -75,6 +76,13 @@ class InfluxDBManager:
             if not result.empty:
                 result['_time'] = pd.to_datetime(result['_time'])
                 result = result.set_index('_time')
+                
+                # Rename columns to match expected format
+                if 'wti_price' in result.columns:
+                    result = result.rename(columns={'wti_price': 'wti_price'})
+                if 'brent_price' in result.columns:
+                    result = result.rename(columns={'brent_price': 'brent_price'})
+                
                 logger.info(f"Retrieved {len(result)} oil price records")
             else:
                 logger.warning("No oil price data found")
@@ -86,14 +94,17 @@ class InfluxDBManager:
             return pd.DataFrame()
     
     def get_electricity_prices(self, days_back: int = 30) -> pd.DataFrame:
-        """Query German electricity price data from InfluxDB."""
+        """Query German electricity price data from InfluxDB using new schema."""
         try:
             query = f'''
             from(bucket: "{self.bucket}")
                 |> range(start: -{days_back}d)
-                |> filter(fn: (r) => r["_measurement"] == "electricity_prices")
-                |> filter(fn: (r) => r["_field"] == "german_price")
-                |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
+                |> filter(fn: (r) => r["_measurement"] == "energy_data")
+                |> filter(fn: (r) => r["_field"] == "value")
+                |> filter(fn: (r) => r["county"] == "DE-LU")
+                |> filter(fn: (r) => r["data_type"] == "actual")
+                |> filter(fn: (r) => r["metric"] == "day_ahead_price_actual")
+                |> pivot(rowKey:["_time"], columnKey: ["metric"], valueColumn: "_value")
             '''
             
             result = self.query_api.query_data_frame(query, org=self.org)
@@ -101,6 +112,11 @@ class InfluxDBManager:
             if not result.empty:
                 result['_time'] = pd.to_datetime(result['_time'])
                 result = result.set_index('_time')
+                
+                # Rename column to match expected format
+                if 'day_ahead_price_actual' in result.columns:
+                    result = result.rename(columns={'day_ahead_price_actual': 'german_price'})
+                
                 logger.info(f"Retrieved {len(result)} electricity price records")
             else:
                 logger.warning("No electricity price data found")

@@ -16,7 +16,7 @@ from config import Config
 from logger import setup_logger
 from bird_makeup_client import BirdMakeupClient
 from sentiment_analyzer import SentimentAnalyzer
-from influxdb_client import InfluxDBManager
+from db_manager import InfluxDBManager
 from correlation_analyzer import CorrelationAnalyzer
 from report_generator import ReportGenerator
 
