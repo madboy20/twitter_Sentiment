@@ -119,12 +119,16 @@ Daily reports include:
 The system expects price data in InfluxDB with these measurements:
 
 ### Oil Prices
-- Measurement: `oil_prices`
-- Fields: `wti_price`, `brent_price`
+- Measurement: `crude_oil_prices`
+- Fields: `price_usd`
+- Type: `wti_price`, `brent_price`
 
 ### Electricity Prices
-- Measurement: `electricity_prices`
-- Fields: `german_price`
+- Measurement: `energy_data`
+- Fields: `value`
+- county: `DE-LU`
+- data_type: `actual`
+- metric: `day_ahead_price_actual`
 
 ## Keywords for Correlation
 
